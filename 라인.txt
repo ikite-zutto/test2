@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LINE Chat - Dark Theme</title>
+<!-- html2canvas 라이브러리 로드 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    body {
+        font-family: "Helvetica Neue", Helvetica, Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+        background-color: #1a1a1a; /* 화면 바깥 배경 (더 어둡게) */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 0 50px 0; /* 위아래 여백 */
+    }
+    
+    /* 캡처 버튼 스타일 */
+    .btn-capture {
+        margin-bottom: 20px;
+        padding: 12px 24px;
+        background-color: #79d73d;
+        color: #111111;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        transition: background-color 0.2s;
+    }
+    .btn-capture:hover {
+        background-color: #68c130;
+    }
+
+    .line-container {
+        width: 100%;
+        max-width: 400px;
+        /* height: auto로 설정하여 스크롤 없이 한 번에 캡처되도록 함 */
+        height: auto; 
+        min-height: 800px;
+        background-color: #333333; /* 요청하신 적당한 짙은 회색 배경 */
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    }
+    .line-header {
+        background-color: #222222;
+        color: #ffffff;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        padding: 0 15px;
+        font-size: 16px;
+        font-weight: bold;
+        position: relative;
+        z-index: 10;
+    }
+    .line-header .back-btn {
+        margin-right: 15px;
+        font-size: 20px;
+        cursor: pointer;
+    }
+    .line-chat {
+        flex: 1;
+        padding: 15px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .msg {
+        display: flex;
+        max-width: 100%;
+    }
+    .msg.left {
+        align-items: flex-start;
+    }
+    .msg.right {
+        justify-content: flex-end;
+        align-items: flex-end;
+    }
+    
+    /* 프로필 사진 영역 */
+    .profile-pic-container {
+        width: 40px;
+        height: 40px;
+        margin-right: 8px;
+        flex-shrink: 0;
+    }
+    .profile-pic {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        background-color: #555;
+    }
+
+    .msg-content {
+        display: flex;
+        flex-direction: column;
+        max-width: 70%;
+    }
+    .msg-name {
+        font-size: 11px;
+        color: #cccccc;
+        margin-bottom: 3px;
+        margin-left: 2px;
+    }
+    .bubble-wrap {
+        display: flex;
+        align-items: flex-end;
+    }
+    .msg.right .bubble-wrap {
+        flex-direction: row-reverse;
+    }
+    .bubble {
+        position: relative;
+        padding: 8px 12px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.4;
+        word-break: break-word;
+    }
+    
+    /* 왼쪽 말풍선 (상대방) */
+    .msg.left .bubble {
+        background-color: #ffffff;
+        color: #333333;
+    }
+    .msg.left .bubble::before {
+        content: "";
+        position: absolute;
+        top: 12px;
+        left: -6px;
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+        border-right: 8px solid #ffffff;
+    }
+    
+    /* 오른쪽 말풍선 (나) - 다크모드에 맞는 톤다운된 라인 그린 */
+    .msg.right .bubble {
+        background-color: #79d73d;
+        color: #111111;
+    }
+    .msg.right .bubble::before {
+        content: "";
+        position: absolute;
+        top: 12px;
+        right: -6px;
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+        border-left: 8px solid #79d73d;
+    }
+    
+    /* 연속된 메시지 처리 (꼬리표 및 프로필 숨김) */
+    .msg.left.consecutive .profile-pic-container {
+        visibility: hidden;
+    }
+    .msg.left.consecutive .msg-name {
+        display: none;
+    }
+    .msg.left.consecutive .bubble::before,
+    .msg.right.consecutive .bubble::before {
+        display: none;
+    }
+    .msg.left.consecutive .bubble {
+        border-top-left-radius: 4px;
+    }
+    .msg.right.consecutive .bubble {
+        border-top-right-radius: 4px;
+    }
+    
+    /* 시간 및 읽음 표시 */
+    .msg-info {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        font-size: 10px;
+        color: #aaaaaa;
+        margin: 0 5px;
+        min-width: 30px;
+    }
+    .msg.left .msg-info {
+        align-items: flex-start;
+    }
+    .msg.right .msg-info {
+        align-items: flex-end;
+    }
+    .read-mark {
+        margin-bottom: 2px;
+    }
+    
+    /* 사진 말풍선용 특수 처리 */
+    .bubble.image-bubble {
+        padding: 0;
+        background-color: transparent;
+    }
+    .bubble.image-bubble::before {
+        display: none;
+    }
+    .bubble.image-bubble img {
+        display: block;
+        width: 200px;
+        height: auto;
+        border-radius: 16px;
+        aspect-ratio: 3/4;
+        object-fit: cover;
+    }
+    
+    /* 날짜 구분선 */
+    .date-divider {
+        text-align: center;
+        margin: 10px 0;
+    }
+    .date-divider span {
+        background-color: rgba(0, 0, 0, 0.4);
+        color: #dddddd;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 11px;
+    }
+</style>
+</head>
+<body>
+
+<!-- 캡처 버튼 -->
+<button class="btn-capture" onclick="captureChat()">📸 고화질 캡처 저장</button>
+
+<!-- 캡처될 영역 시작 -->
+<div class="line-container" id="capture-area">
+    <div class="line-header">
+        <span class="back-btn">‹</span>
+        <span>ゆう♡</span>
+    </div>
+    
+    <div class="line-chat">
+        
+        <div class="date-divider">
+            <span>今日</span>
+        </div>
+
+        <!-- Yuu 1 -->
+        <div class="msg left">
+            <div class="profile-pic-container">
+                <img class="profile-pic" src="https://imgur.com/bsZwz75.png" alt="Yuu">
+            </div>
+            <div class="msg-content">
+                <div class="msg-name">ゆう♡</div>
+                <div class="bubble-wrap">
+                    <div class="bubble">小夜、今どこ？帰ってくる？</div>
+                    <div class="msg-info">
+                        <span class="time">19:22</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 2 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">冷蔵庫に卵なかったから買っておいたよ〜</div>
+                    <div class="msg-info">
+                        <span class="time">19:23</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 3 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">今日オムライス作ろ。ケチャップでハート描いてね ♡</div>
+                    <div class="msg-info">
+                        <span class="time">19:23</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 4 -->
+        <div class="msg left">
+            <div class="profile-pic-container">
+                <img class="profile-pic" src="https://imgur.com/bsZwz75.png" alt="Yuu">
+            </div>
+            <div class="msg-content">
+                <div class="msg-name">ゆう♡</div>
+                <div class="bubble-wrap">
+                    <div class="bubble">小夜？</div>
+                    <div class="msg-info">
+                        <span class="time">19:38</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 5 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">既読つかないんだけど。</div>
+                    <div class="msg-info">
+                        <span class="time">19:41</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 6 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">ねえ、途中で何かあった？</div>
+                    <div class="msg-info">
+                        <span class="time">19:42</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 7 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">俺、迎えに行こうか。</div>
+                    <div class="msg-info">
+                        <span class="time">19:42</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 8 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">もう靴履いた。</div>
+                    <div class="msg-info">
+                        <span class="time">19:42</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sayo 1 (Image) -->
+        <div class="msg right">
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble image-bubble">
+                        <!-- 여캐가 보낸 사진 링크 -->
+                        <img src="https://imgur.com/6HsSY9k.png" alt="사진">
+                    </div>
+                    <div class="msg-info">
+                        <span class="read-mark">既読</span>
+                        <span class="time">19:47</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sayo 2 -->
+        <div class="msg right consecutive">
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">ごめんね！電車激混みでスマホ打てなかったの。今は空いてきたよ！</div>
+                    <div class="msg-info">
+                        <span class="read-mark">既読</span>
+                        <span class="time">19:47</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 9 -->
+        <div class="msg left">
+            <div class="profile-pic-container">
+                <img class="profile-pic" src="https://imgur.com/bsZwz75.png" alt="Yuu">
+            </div>
+            <div class="msg-content">
+                <div class="msg-name">ゆう♡</div>
+                <div class="bubble-wrap">
+                    <div class="bubble">………。</div>
+                    <div class="msg-info">
+                        <span class="time">19:47</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 10 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">先に言ってよ。靴まで履いたのに</div>
+                    <div class="msg-info">
+                        <span class="time">19:47</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 11 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">小夜のばか</div>
+                    <div class="msg-info">
+                        <span class="time">19:47</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Yuu 12 -->
+        <div class="msg left consecutive">
+            <div class="profile-pic-container"></div>
+            <div class="msg-content">
+                <div class="bubble-wrap">
+                    <div class="bubble">はやく帰ってきて。</div>
+                    <div class="msg-info">
+                        <span class="time">19:48</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+</body>
+<!-- 캡처될 영역 끝 -->
+
+<script>
+function captureChat() {
+    // 캡처할 영역 선택
+    const captureArea = document.getElementById('capture-area');
+    
+    // 버튼 텍스트 변경 (로딩 중 표시)
+    const btn = document.querySelector('.btn-capture');
+    const originalText = btn.innerText;
+    btn.innerText = "⏳ 저장 중...";
+    btn.disabled = true;
+
+    // html2canvas 실행
+    html2canvas(captureArea, {
+        scale: 3, // 숫자가 클수록 고화질 (기본 1, 3이면 3배 해상도)
+        useCORS: true, // 외부 이미지(Imgur) 로드를 위해 필수
+        backgroundColor: '#333333' // 캡처 시 배경색 지정
+    }).then(canvas => {
+        // 이미지 다운로드 링크 생성
+        const link = document.createElement('a');
+        link.download = 'line_chat_capture.png'; // 저장될 파일 이름
+        link.href = canvas.toDataURL('image/png'); // 캔버스를 PNG 이미지로 변환
+        link.click(); // 자동 클릭하여 다운로드 실행
+        
+        // 버튼 원래대로 복구
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }).catch(err => {
+        console.error("캡처 중 오류 발생:", err);
+        alert("캡처에 실패했습니다. (GitHub Pages 같은 웹 서버 환경에서 실행해주세요!)");
+        btn.innerText = originalText;
+        btn.disabled = false;
+    });
+}
+</script>
+
+</body>
+</html>
